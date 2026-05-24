@@ -442,6 +442,19 @@ int ext4_dir_dx_init(struct ext4_inode_ref *dir, struct ext4_inode_ref *parent)
 		ext4_dir_set_csum(dir, be);
 	} else {
 		ext4_dir_en_set_entry_len(be, block_size);
+		/* Without these two calls, name_len and file_type stay as
+		 * whatever was in the bcache buffer when ext4_buf_alloc()
+		 * handed it back. ext4_buf_alloc() uses malloc (not calloc)
+		 * and ext4_block_get_noread() never reads from disk, so the
+		 * buffer can carry stale dot-entry bytes from a recently
+		 * freed dir-index root. Those bytes survive onto disk and
+		 * the Linux kernel rejects the directory on first write:
+		 *   EXT4-fs error: bad entry in directory:
+		 *   '.' directory cannot be the last in data block
+		 * Mirror what the metadata_csum branch already does above.
+		 */
+		ext4_dir_en_set_name_len(sb, be, 0);
+		ext4_dir_en_set_inode_type(sb, be, EXT4_DE_UNKNOWN);
 	}
 
 	ext4_dir_en_set_inode(be, 0);
