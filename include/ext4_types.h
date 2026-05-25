@@ -276,7 +276,8 @@ struct ext4_sblock {
 /*
  * EXT4 supported feature set
  */
-#define EXT4_SUPPORTED_FCOM (EXT4_FCOM_DIR_INDEX)
+#define EXT4_SUPPORTED_FCOM \
+	(EXT4_FCOM_DIR_INDEX | EXT4_FCOM_EXT_ATTR)
 
 #define EXT4_SUPPORTED_FINCOM                              \
 	(EXT4_FINCOM_FILETYPE | EXT4_FINCOM_META_BG |      \
