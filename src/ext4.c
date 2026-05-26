@@ -51,6 +51,7 @@
 #include <ext4_block_group.h>
 #include <ext4_dir_idx.h>
 #include <ext4_xattr.h>
+#include <ext4_acl.h>
 #include <ext4_journal.h>
 
 
@@ -2693,9 +2694,37 @@ int ext4_setxattr(const char *path, const char *name, size_t name_len,
 	if (r != EOK)
 		goto Finish;
 
-	r = ext4_xattr_set(&inode_ref, name_index, dissected_name,
-			dissected_len, data, data_size);
+	/* POSIX ACL xattrs use a different on-disk layout than the userspace
+	 * xattr format that callers supply. Translate here so reads via the
+	 * Linux kernel's ext4 driver (which expects EXT4_ACL_VERSION + short
+	 * obj/mask/other entries) succeed. */
+	if (name_index == EXT4_XATTR_INDEX_POSIX_ACL_ACCESS_VAL ||
+	    name_index == EXT4_XATTR_INDEX_POSIX_ACL_DEFAULT_VAL) {
+		size_t ondisk_size = 0;
+		void *ondisk = NULL;
 
+		r = ext4_acl_to_disk(data, data_size, NULL, 0, &ondisk_size);
+		if (r != EOK)
+			goto PutInode;
+		ondisk = ext4_calloc(1, ondisk_size);
+		if (!ondisk) {
+			r = ENOMEM;
+			goto PutInode;
+		}
+		r = ext4_acl_to_disk(data, data_size, ondisk, ondisk_size,
+				     &ondisk_size);
+		if (r == EOK) {
+			r = ext4_xattr_set(&inode_ref, name_index,
+					   dissected_name, dissected_len,
+					   ondisk, ondisk_size);
+		}
+		ext4_free(ondisk);
+	} else {
+		r = ext4_xattr_set(&inode_ref, name_index, dissected_name,
+				   dissected_len, data, data_size);
+	}
+
+PutInode:
 	ext4_fs_put_inode_ref(&inode_ref);
 Finish:
 	if (r != EOK)
@@ -2740,9 +2769,38 @@ int ext4_getxattr(const char *path, const char *name, size_t name_len,
 	if (r != EOK)
 		goto Finish;
 
-	r = ext4_xattr_get(&inode_ref, name_index, dissected_name,
-				dissected_len, buf, buf_size, data_size);
+	if (name_index == EXT4_XATTR_INDEX_POSIX_ACL_ACCESS_VAL ||
+	    name_index == EXT4_XATTR_INDEX_POSIX_ACL_DEFAULT_VAL) {
+		/* The on-disk POSIX ACL is at most as large as the userspace
+		 * form (short on-disk entries become 8-byte userspace entries,
+		 * never the other way around), so we can probe the on-disk
+		 * size first into a scratch buffer sized to the caller's
+		 * userspace probe and convert in place. */
+		size_t ondisk_size = 0;
+		void *ondisk = NULL;
 
+		r = ext4_xattr_get(&inode_ref, name_index, dissected_name,
+				   dissected_len, NULL, 0, &ondisk_size);
+		if (r != EOK)
+			goto PutInodeGet;
+		ondisk = ext4_calloc(1, ondisk_size);
+		if (!ondisk) {
+			r = ENOMEM;
+			goto PutInodeGet;
+		}
+		r = ext4_xattr_get(&inode_ref, name_index, dissected_name,
+				   dissected_len, ondisk, ondisk_size,
+				   &ondisk_size);
+		if (r == EOK)
+			r = ext4_acl_from_disk(ondisk, ondisk_size, buf,
+					       buf_size, data_size);
+		ext4_free(ondisk);
+	} else {
+		r = ext4_xattr_get(&inode_ref, name_index, dissected_name,
+				   dissected_len, buf, buf_size, data_size);
+	}
+
+PutInodeGet:
 	ext4_fs_put_inode_ref(&inode_ref);
 Finish:
 	EXT4_MP_UNLOCK(mp);
