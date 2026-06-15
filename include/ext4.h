@@ -384,6 +384,38 @@ uint64_t ext4_ftell(ext4_file *file);
  * @return  File size. */
 uint64_t ext4_fsize(ext4_file *file);
 
+/**@brief   Physical extent of a regular file's data, in filesystem blocks.
+ *
+ * Tensorlake addition. One run of contiguous file data blocks mapped to a
+ * contiguous run of image (block-device) blocks. */
+struct ext4_file_extent {
+	uint64_t logical_block;  /**< first file block of the run */
+	uint64_t physical_block; /**< first image block of the run */
+	uint64_t block_count;    /**< number of contiguous blocks */
+};
+
+/**@brief   Enumerate a regular file's on-disk data extents (read-only).
+ *
+ * Tensorlake addition. Maps every contiguous run of the file's data blocks to
+ * its physical location in the underlying image, so a host-side
+ * content-addressed chunker can find a file's bytes in the raw image without a
+ * kernel mount. Holes and unwritten (preallocated, never-written) ranges
+ * produce no entry; emitted extents cover exactly the file's stored bytes.
+ * Physically-contiguous file blocks are coalesced into a single entry.
+ *
+ * @param path       Path of the regular file (must be mounted).
+ * @param out        Caller buffer for extents (may be NULL to probe the count).
+ * @param out_cap    Capacity of @p out in entries.
+ * @param out_count  Output: number of extents the file has. If it exceeds
+ *                   @p out_cap, @p out was filled to capacity only and the
+ *                   caller must retry with a larger buffer.
+ * @param block_size Output (optional): filesystem block size in bytes.
+ *
+ * @return  Standard error code. */
+int ext4_file_get_extents(const char *path, struct ext4_file_extent *out,
+			  uint32_t out_cap, uint32_t *out_count,
+			  uint32_t *block_size);
+
 
 /**@brief Get inode of file/directory/link.
  *

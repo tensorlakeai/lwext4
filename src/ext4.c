@@ -3294,6 +3294,105 @@ void ext4_dir_entry_rewind(ext4_dir *dir)
 	dir->next_off = 0;
 }
 
+int ext4_file_get_extents(const char *path, struct ext4_file_extent *out,
+			  uint32_t out_cap, uint32_t *out_count,
+			  uint32_t *block_size)
+{
+	ext4_file f;
+	struct ext4_mountpoint *mp;
+	struct ext4_fs *fs;
+	struct ext4_inode_ref ref;
+	uint32_t ino, bsize, n = 0;
+	uint64_t fsize, total, ib;
+	uint64_t run_logical = 0, run_phys = 0, run_len = 0;
+	int r;
+
+	if (out_count)
+		*out_count = 0;
+
+	/* Resolve the path to an inode + mount point via the read path. */
+	r = ext4_fopen(&f, path, "rb");
+	if (r != EOK)
+		return r;
+
+	mp = f.mp;
+	ino = f.inode;
+	fsize = f.fsize;
+	ext4_fclose(&f);
+
+	if (!mp)
+		return ENOENT;
+
+	fs = &mp->fs;
+	bsize = ext4_sb_get_block_size(&fs->sb);
+	if (block_size)
+		*block_size = bsize;
+	if (bsize == 0)
+		return EINVAL;
+
+	EXT4_MP_LOCK(mp);
+	r = ext4_fs_get_inode_ref(fs, ino, &ref);
+	if (r != EOK) {
+		EXT4_MP_UNLOCK(mp);
+		return r;
+	}
+
+	/*
+	 * Walk the file's logical blocks, coalescing physically-contiguous
+	 * runs into one extent. Holes and unwritten (preallocated, never
+	 * written) blocks map to physical block 0 with support_unwritten=false
+	 * and contribute no entry, so the emitted extents cover exactly the
+	 * file's stored data bytes.
+	 */
+	total = (fsize + bsize - 1) / bsize;
+	ib = 0;
+	while (ib < total) {
+		ext4_fsblk_t fb = 0;
+
+		r = ext4_fs_get_inode_dblk_idx(&ref, (ext4_lblk_t)ib, &fb,
+					       false);
+		if (r != EOK)
+			break;
+
+		if (fb != 0 && run_len != 0 && fb == run_phys + run_len) {
+			run_len++;
+		} else {
+			if (run_len != 0) {
+				if (out && n < out_cap) {
+					out[n].logical_block = run_logical;
+					out[n].physical_block = run_phys;
+					out[n].block_count = run_len;
+				}
+				n++;
+			}
+			if (fb != 0) {
+				run_logical = ib;
+				run_phys = fb;
+				run_len = 1;
+			} else {
+				run_len = 0;
+			}
+		}
+		ib++;
+	}
+
+	if (r == EOK && run_len != 0) {
+		if (out && n < out_cap) {
+			out[n].logical_block = run_logical;
+			out[n].physical_block = run_phys;
+			out[n].block_count = run_len;
+		}
+		n++;
+	}
+
+	ext4_fs_put_inode_ref(&ref);
+	EXT4_MP_UNLOCK(mp);
+
+	if (out_count)
+		*out_count = n;
+	return r;
+}
+
 /**
  * @}
  */
