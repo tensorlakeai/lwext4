@@ -166,7 +166,8 @@ static int create_fs_aux_info(struct fs_aux_info *aux_info,
 
 	aux_info->default_i_flags = EXT4_INODE_FLAG_NOATIME;
 
-	uint32_t last_group_size = aux_info->len_blocks % info->blocks_per_group;
+	uint32_t last_group_size = (aux_info->len_blocks -
+			aux_info->first_data_block) % info->blocks_per_group;
 	uint32_t last_header_size = 2 + aux_info->inode_table_blocks;
 	if (has_superblock(info, aux_info->groups - 1))
 		last_header_size += 1 + aux_info->bg_desc_blocks +
