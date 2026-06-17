@@ -3340,9 +3340,16 @@ int ext4_file_get_extents(const char *path, struct ext4_file_extent *out,
 	/*
 	 * Walk the file's logical blocks, coalescing physically-contiguous
 	 * runs into one extent. Holes and unwritten (preallocated, never
-	 * written) blocks map to physical block 0 with support_unwritten=false
-	 * and contribute no entry, so the emitted extents cover exactly the
-	 * file's stored data bytes.
+	 * written) blocks map to physical block 0 and contribute no entry, so
+	 * the emitted extents cover exactly the file's stored data bytes.
+	 *
+	 * Pass support_unwritten=true: that flag only gates a debug assertion
+	 * in ext4_fs_get_inode_dblk_idx (ext4_assert(*fblock ||
+	 * support_unwritten)); the returned block is 0 for unwritten/holes
+	 * either way. Under the default CONFIG_DEBUG_ASSERT + CONFIG_HAVE_OWN_ASSERT
+	 * build, passing false makes that assert SPIN (while(1)) on exactly the
+	 * unwritten blocks this walk relies on, and every real rootfs (journal,
+	 * preallocated files) has them.
 	 */
 	total = (fsize + bsize - 1) / bsize;
 	ib = 0;
@@ -3350,7 +3357,7 @@ int ext4_file_get_extents(const char *path, struct ext4_file_extent *out,
 		ext4_fsblk_t fb = 0;
 
 		r = ext4_fs_get_inode_dblk_idx(&ref, (ext4_lblk_t)ib, &fb,
-					       false);
+					       true);
 		if (r != EOK)
 			break;
 
