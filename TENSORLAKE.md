@@ -27,6 +27,9 @@ Current Tensorlake-authored patches on `tensorlake-master` (relative to upstream
   `USER_OBJ`/`GROUP_OBJ`/`MASK`/`OTHER`) inside `ext4_setxattr` /
   `ext4_getxattr`. Mirrors the Linux kernel's `fs/ext4/acl.c` semantics so
   ACLs written through lwext4 are readable by the kernel and vice versa.
+- `ext4_mkfs`: compute free-block counts from the real final block-group
+  size when formatting filesystems whose size is not a multiple of the full
+  group size.
 
 ## Rebasing / merging
 
