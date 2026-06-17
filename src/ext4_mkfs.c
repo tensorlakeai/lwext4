@@ -166,7 +166,8 @@ static int create_fs_aux_info(struct fs_aux_info *aux_info,
 
 	aux_info->default_i_flags = EXT4_INODE_FLAG_NOATIME;
 
-	uint32_t last_group_size = aux_info->len_blocks % info->blocks_per_group;
+	uint32_t last_group_size = (aux_info->len_blocks -
+			aux_info->first_data_block) % info->blocks_per_group;
 	uint32_t last_header_size = 2 + aux_info->inode_table_blocks;
 	if (has_superblock(info, aux_info->groups - 1))
 		last_header_size += 1 + aux_info->bg_desc_blocks +
@@ -357,16 +358,24 @@ static int write_bgroups(struct ext4_blockdev *bd, struct fs_aux_info *aux_info,
 		uint64_t bg_start_block = aux_info->first_data_block +
 			aux_info->first_data_block + i * info->blocks_per_group;
 		uint32_t blk_off = 0;
+		uint64_t blocks_in_group = info->blocks_per_group;
+
+		if (i == (aux_info->groups - 1))
+			blocks_in_group = aux_info->len_blocks -
+				aux_info->first_data_block -
+				(uint64_t)(aux_info->groups - 1) *
+				info->blocks_per_group;
 
 		bg_desc = (void *)(aux_info->bg_desc_blk + k * dsc_size);
-		bg_free_blk = info->blocks_per_group -
+		/*
+		 * create_fs_aux_info() drops a partial last group if it cannot
+		 * fit the metadata below, so this conversion cannot underflow.
+		 */
+		bg_free_blk = (uint32_t)blocks_in_group -
 				aux_info->inode_table_blocks;
 
 		bg_free_blk -= 2;
 		blk_off += aux_info->bg_desc_blocks;
-
-		if (i == (aux_info->groups - 1))
-			bg_free_blk -= aux_info->first_data_block;
 
 		if (has_superblock(info, i)) {
 			bg_start_block++;
