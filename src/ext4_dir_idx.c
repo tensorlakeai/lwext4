@@ -433,6 +433,13 @@ int ext4_dir_dx_init(struct ext4_inode_ref *dir, struct ext4_inode_ref *parent)
 	/* Fill the whole block with empty entry */
 	struct ext4_dir_en *be = (void *)new_block.data;
 
+	/* Clear the inode field BEFORE computing the leaf checksum below.
+	 * new_block came from ext4_trans_block_get_noread() (uninitialized
+	 * buffer), so doing this after ext4_dir_set_csum() left a stale
+	 * checksum on an empty htree leaf that is never re-inserted, which
+	 * e2fsck reports as "directory passes checks but fails checksum". */
+	ext4_dir_en_set_inode(be, 0);
+
 	if (ext4_sb_feature_ro_com(sb, EXT4_FRO_COM_METADATA_CSUM)) {
 		uint16_t len = block_size - sizeof(struct ext4_dir_entry_tail);
 		ext4_dir_en_set_entry_len(be, len);
@@ -456,8 +463,6 @@ int ext4_dir_dx_init(struct ext4_inode_ref *dir, struct ext4_inode_ref *parent)
 		ext4_dir_en_set_name_len(sb, be, 0);
 		ext4_dir_en_set_inode_type(sb, be, EXT4_DE_UNKNOWN);
 	}
-
-	ext4_dir_en_set_inode(be, 0);
 
 	ext4_trans_set_block_dirty(new_block.buf);
 	rc = ext4_block_set(dir->fs->bdev, &new_block);
