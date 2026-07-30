@@ -307,7 +307,7 @@ int ext4_ialloc_alloc_inode(struct ext4_fs *fs, uint32_t *idx, bool is_dir)
 						    b.data);
 			ext4_trans_set_block_dirty(b.buf);
 
-			ext4_block_set(fs->bdev, &b);
+			rc = ext4_block_set(fs->bdev, &b);
 			if (rc != EOK) {
 				ext4_fs_put_block_group_ref(&bg_ref);
 				return rc;
