@@ -460,6 +460,15 @@ int ext4_mode_set(const char *path, uint32_t mode);
  * @return  Standard error code.*/
 int ext4_mode_get(const char *path, uint32_t *mode);
 
+/**@brief Get the number of hard links to a file.
+ *
+ * @param path  Path to the file
+ * @param nlink Output: link count of the inode
+ *
+ * @return Standard error code
+ */
+int ext4_nlink_get(const char *path, uint32_t *nlink);
+
 /**@brief Change file owner and group.
  *
  * @param path Path to file/dir/link.
