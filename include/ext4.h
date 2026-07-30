@@ -469,6 +469,31 @@ int ext4_mode_get(const char *path, uint32_t *mode);
  */
 int ext4_nlink_get(const char *path, uint32_t *nlink);
 
+/**@brief Consolidated stat attributes returned by ext4_stat_get. */
+struct ext4_stat {
+	uint32_t mode;   /* full mode including file-type bits */
+	uint32_t uid;
+	uint32_t gid;
+	uint32_t nlink;
+	uint32_t atime;
+	uint32_t mtime;
+	uint32_t ctime;
+	uint64_t size;
+};
+
+/**@brief Get all stat attributes of a file in one path resolution.
+ *
+ * Equivalent to ext4_mode_get + ext4_owner_get + ext4_nlink_get +
+ * ext4_atime_get + ext4_mtime_get + ext4_ctime_get plus the inode size,
+ * but resolves the path and loads the inode only once.
+ *
+ * @param path Path to the file
+ * @param st   Output stat attributes
+ *
+ * @return Standard error code
+ */
+int ext4_stat_get(const char *path, struct ext4_stat *st);
+
 /**@brief Change file owner and group.
  *
  * @param path Path to file/dir/link.
