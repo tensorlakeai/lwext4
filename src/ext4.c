@@ -2483,7 +2483,24 @@ static int ext4_fsymlink_set(ext4_file *f, const void *buf, uint32_t size)
 			goto Finish;
 
 		off = fblock * block_size;
-		r = ext4_block_writebytes(f->mp->fs.bdev, off, buf, size);
+		/* Zero-fill the whole target block before storing the link
+		 * target. The freshly allocated block can carry stale bytes
+		 * from a previously freed block (e.g. directory blocks freed
+		 * by rename/remove churn). e2fsck validates a slow symlink by
+		 * requiring its block to hold exactly i_size NUL-terminated
+		 * bytes, so a non-zero tail makes the symlink invalid and the
+		 * referencing dirent unrepairable in preen mode. */
+		{
+			void *zeroed = ext4_calloc(1, block_size);
+			if (!zeroed) {
+				r = ENOMEM;
+				goto Finish;
+			}
+			memcpy(zeroed, buf, size);
+			r = ext4_block_writebytes(f->mp->fs.bdev, off, zeroed,
+						  block_size);
+			ext4_free(zeroed);
+		}
 		if (r != EOK)
 			goto Finish;
 	}
