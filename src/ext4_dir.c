@@ -538,8 +538,12 @@ int ext4_dir_remove_entry(struct ext4_inode_ref *parent, const char *name,
 	if (rc != EOK)
 		return rc;
 
-	/* Invalidate entry */
+	/* Invalidate entry. Also clear the file type: when the entry is
+	 * the first in its block it stays visible (there is no previous
+	 * entry to absorb its rec_len), and a stale file type on an
+	 * inode-0 dirent confuses filesystem validators and debuggers. */
 	ext4_dir_en_set_inode(result.dentry, 0);
+	ext4_dir_en_set_inode_type(sb, result.dentry, EXT4_DE_UNKNOWN);
 
 	/* Store entry position in block */
 	uint32_t pos = (uint8_t *)result.dentry - result.block.data;
