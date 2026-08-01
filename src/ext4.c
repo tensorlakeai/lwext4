@@ -1977,6 +1977,7 @@ int ext4_fwrite(ext4_file *file, const void *buf, size_t size, size_t *wcnt)
 
 	if (size) {
 		uint64_t off;
+		bool tail_appended = false;
 		if (iblk_idx < ifile_blocks) {
 			r = ext4_fs_init_inode_dblk_idx(&ref, iblk_idx, &fblk);
 			if (r != EOK)
@@ -1986,10 +1987,26 @@ int ext4_fwrite(ext4_file *file, const void *buf, size_t size, size_t *wcnt)
 			if (r != EOK)
 				/*Node size sholud be updated.*/
 				goto out_fsize;
+			tail_appended = true;
 		}
 
 		off = fblk * block_size;
-		r = ext4_block_writebytes(file->mp->fs.bdev, off, u8_buf, size);
+		if (tail_appended && size < block_size) {
+			/* Freshly allocated tail block: zero the whole block so the
+			 * slack past EOF cannot expose stale bytes from a previously
+			 * freed block. Mirrors the ext4_fsymlink_set fix. */
+			void *zeroed = ext4_calloc(1, block_size);
+			if (!zeroed) {
+				r = ENOMEM;
+				goto Finish;
+			}
+			memcpy(zeroed, u8_buf, size);
+			r = ext4_block_writebytes(file->mp->fs.bdev, off, zeroed,
+						  block_size);
+			ext4_free(zeroed);
+		} else {
+			r = ext4_block_writebytes(file->mp->fs.bdev, off, u8_buf, size);
+		}
 		if (r != EOK)
 			goto Finish;
 
