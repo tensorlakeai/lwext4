@@ -238,6 +238,14 @@ int ext4_block_get_noread(struct ext4_blockdev *bdev, struct ext4_block *b,
 	if (!b->data)
 		return ENOMEM;
 
+	/* A no-read cache miss has no initialized contents.  Callers use this
+	 * path for freshly allocated filesystem and journal blocks, and several
+	 * of them intentionally update only the live portion of the block.  Keep
+	 * the unused bytes deterministic and prevent heap contents from reaching
+	 * disk.  Cache hits must retain their current contents. */
+	if (is_new)
+		memset(b->data, 0, bdev->lg_bsize);
+
 	return EOK;
 }
 

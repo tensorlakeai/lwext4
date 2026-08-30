@@ -338,6 +338,12 @@ void ext4_dir_write_entry(struct ext4_sblock *sb, struct ext4_dir_en *en,
 
 	/* Write name */
 	memcpy(en->name, name, name_len);
+	/* Directory names are four-byte aligned on disk.  Clear their padding so
+	 * the image does not depend on the prior contents of this directory slot. */
+	size_t used_len = sizeof(struct ext4_fake_dir_entry) + name_len;
+	size_t aligned_len = (used_len + 3) & ~((size_t)3);
+	ext4_assert(aligned_len <= entry_len);
+	memset((uint8_t *)en + used_len, 0, aligned_len - used_len);
 }
 
 int ext4_dir_add_entry(struct ext4_inode_ref *parent, const char *name,
